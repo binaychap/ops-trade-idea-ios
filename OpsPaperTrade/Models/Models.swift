@@ -1,5 +1,47 @@
 import Foundation
 
+// MARK: - Lenient numbers
+
+/// The bot's ledger stores quantities as JSON strings (e.g. `"quantity": "0"`,
+/// `"filled_quantity": "12.5"`), while other endpoints emit real numbers.
+/// `LenientDouble` decodes either form into a `Double?`; unparseable values
+/// decode as `nil` instead of failing the whole response. Call sites keep
+/// using `Double?`, so `trade.notionalUsd` etc. are unchanged.
+@propertyWrapper
+struct LenientDouble: Codable {
+    var wrappedValue: Double?
+
+    init(wrappedValue: Double?) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            wrappedValue = nil
+            return
+        }
+        if let number = try? container.decode(Double.self) {
+            wrappedValue = number
+            return
+        }
+        if let text = try? container.decode(String.self), let number = Double(text) {
+            wrappedValue = number
+            return
+        }
+        wrappedValue = nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let value = wrappedValue {
+            try container.encode(value)
+        } else {
+            try container.encodeNil()
+        }
+    }
+}
+
 // MARK: - Health
 
 /// GET /health — every field optional; the server currently returns
@@ -49,7 +91,7 @@ struct Trade: Codable, Identifiable {
     var createdAt: String?
     var updatedAt: String?
     var action: String?
-    var notionalUsd: Double?
+    @LenientDouble var notionalUsd: Double?
     var rationale: String?
     var bracket: Bracket?
     var exit: ExitJob?
@@ -81,10 +123,10 @@ struct ExitJob: Codable {
     var comboId: String?
     var dueAt: String?
     var entryFilledAt: String?
-    var entryFilledQuantity: Double?
-    var bracketFilledQuantity: Double?
-    var remainingQuantity: Double?
-    var quantity: Double?
+    @LenientDouble var entryFilledQuantity: Double?
+    @LenientDouble var bracketFilledQuantity: Double?
+    @LenientDouble var remainingQuantity: Double?
+    @LenientDouble var quantity: Double?
     var lastError: String?
     var nextCheckAt: String?
     var entrySubmissionError: String?
@@ -94,14 +136,14 @@ struct ExitJob: Codable {
 
 struct OrderSnapshot: Codable {
     var status: String?
-    var filledQuantity: Double?
+    @LenientDouble var filledQuantity: Double?
 }
 
 struct MarketOrderAttempt: Codable {
     var id: String?
-    var quantity: Double?
+    @LenientDouble var quantity: Double?
     var status: String?
-    var filledQuantity: Double?
+    @LenientDouble var filledQuantity: Double?
 }
 
 // MARK: - Account
@@ -110,21 +152,21 @@ struct MarketOrderAttempt: Codable {
 struct AccountResponse: Codable {
     var accountNumber: String?
     var currency: String?
-    var totalValue: Double?
-    var cash: Double?
-    var buyingPower: Double?
+    @LenientDouble var totalValue: Double?
+    @LenientDouble var cash: Double?
+    @LenientDouble var buyingPower: Double?
     var positions: [Position]?
     var asOf: String?
 }
 
 struct Position: Codable, Identifiable {
     var symbol: String?
-    var quantity: Double?
-    var avgCost: Double?
-    var marketPrice: Double?
-    var marketValue: Double?
-    var unrealizedPnl: Double?
-    var unrealizedPnlPct: Double?
+    @LenientDouble var quantity: Double?
+    @LenientDouble var avgCost: Double?
+    @LenientDouble var marketPrice: Double?
+    @LenientDouble var marketValue: Double?
+    @LenientDouble var unrealizedPnl: Double?
+    @LenientDouble var unrealizedPnlPct: Double?
 
     var id: String { symbol ?? UUID().uuidString }
 }
@@ -143,10 +185,10 @@ struct OrderRecord: Codable, Identifiable {
     var symbol: String?
     var side: String?
     var orderType: String?
-    var quantity: Double?
-    var limitPrice: Double?
+    @LenientDouble var quantity: Double?
+    @LenientDouble var limitPrice: Double?
     var status: String?
-    var filledQuantity: Double?
+    @LenientDouble var filledQuantity: Double?
     var createdAt: String?
     var source: String?
 
@@ -160,8 +202,8 @@ struct OrderPreviewRequest: Codable {
     var symbol: String
     var side: String        // "buy" | "sell"
     var orderType: String   // "market" | "limit"
-    var quantity: Double
-    var limitPrice: Double?
+    @LenientDouble var quantity: Double?
+    @LenientDouble var limitPrice: Double?
 }
 
 /// POST /api/trading/orders — request body (preview fields + confirm).
@@ -169,8 +211,8 @@ struct OrderSubmitRequest: Codable {
     var symbol: String
     var side: String
     var orderType: String
-    var quantity: Double
-    var limitPrice: Double?
+    @LenientDouble var quantity: Double?
+    @LenientDouble var limitPrice: Double?
     var confirm: Bool
 
     init(preview: OrderPreviewRequest) {
@@ -189,11 +231,11 @@ struct OrderPreviewResponse: Codable {
     var symbol: String?
     var side: String?
     var orderType: String?
-    var quantity: Double?
-    var limitPrice: Double?
-    var referencePrice: Double?
-    var estimatedNotional: Double?
-    var maxNotionalUsd: Double?
+    @LenientDouble var quantity: Double?
+    @LenientDouble var limitPrice: Double?
+    @LenientDouble var referencePrice: Double?
+    @LenientDouble var estimatedNotional: Double?
+    @LenientDouble var maxNotionalUsd: Double?
     var withinNotionalCap: Bool?
     var marketOpen: Bool?
     var dryRun: Bool?
